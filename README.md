@@ -12,11 +12,17 @@ https://pan.baidu.com/s/1v8-eGwVZMbvfUczbQEwwaA?pwd=7777
 
 # Requirements
 python 3.8
+
 torch 1.12.0
+
 numpy 1.24.4
+
 medpy 0.5.1
+
 nibabel 5.2.1
+
 pandas 2.0.3
+
 scikit-image 0.21.0
 
 Thanks for your attention.
