@@ -1,4 +1,4 @@
-# HPCNet: Hierarchical Perturbation Consistency and Entropy-guided Ensemble for Scribble Supervised Medical Image Segmentation
+# HELPNet: Hierarchical Perturbation Consistency and Entropy-guided Ensemble for Scribble Supervised Medical Image Segmentation
 This project contains the model weights trained according to our algorithm and inference code.
 
 # Model Weights
