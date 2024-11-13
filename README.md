@@ -11,18 +11,11 @@ https://pan.baidu.com/s/1v8-eGwVZMbvfUczbQEwwaA?pwd=7777
 2. The ACDC dataset with mask annotations can be downloaded from [ACDC](https://www.creatis.insa-lyon.fr/Challenge/acdc/).
 
 # Requirements
-python 3.8
-
-torch 1.12.0
-
-numpy 1.24.4
-
-medpy 0.5.1
-
-nibabel 5.2.1
-
-pandas 2.0.3
-
-scikit-image 0.21.0
-
+python 3.8 <br>
+torch 1.12.0<br>
+numpy 1.24.4<br>
+medpy 0.5.1<br>
+nibabel 5.2.1<br>
+pandas 2.0.3<br>
+scikit-image 0.21.0<br><br>
 Thanks for your attention.
