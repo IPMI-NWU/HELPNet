@@ -1,5 +1,5 @@
 # HELPNet: Hierarchical Perturbation Consistency and Entropy-guided Ensemble for Scribble Supervised Medical Image Segmentation
-This project contains the model weights trained according to our algorithm and inference code.
+This project contains the training and testing code for the paper, as well as the model weights trained according to our algorithm.
 
 # Model Weights
 The download links and extraction codes for our model weights are as follows：
