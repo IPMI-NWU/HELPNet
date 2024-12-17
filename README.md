@@ -16,8 +16,17 @@ This project contains the training and testing code for the paper, as well as th
 The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1v8-eGwVZMbvfUczbQEwwaA?pwd=7777)
 
 ## Datasets
-1. The MSCMR dataset with mask annotations can be downloaded from [MSCMRseg](https://zmiclab.github.io/zxh/0/mscmrseg19/data.html).
-2. The ACDC dataset with mask annotations can be downloaded from [ACDC](https://www.creatis.insa-lyon.fr/Challenge/acdc/).
+*  The MSCMRseg dataset with mask annotations can be downloaded from [MSCMRseg](https://zmiclab.github.io/zxh/0/mscmrseg19/data.html).
+
+* Scibble for MSCMR can be downloaded from [MSCMRseg_scribbles](https://github.com/BWGZK/CycleMix/tree/main/MSCMR_scribbles).
+
+*  The ACDC dataset with mask annotations can be downloaded from [ACDC](https://www.creatis.insa-lyon.fr/Challenge/acdc/).
+
+*  Scribble for ACDC can be found at [ACDC_scribbles](https://vios-s.github.io/multiscale-adversarial-attention-gates/data).
+
+*  The CHAOS dataset with mask annotations can be downloaded from [CHOAS](https://chaos.grand-challenge.org/).
+
+*  Scribble for CHAOS can be found at [CHOAS_scribbles](https://github.com/zefanyang/pacingpseudo).
 
 ## Requirements
 * python 3.8 <br>
