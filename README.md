@@ -13,7 +13,7 @@ Experimental results on three public datasets ACDC, MSCMRseg, and CHAOS show tha
 
 
 ## Qualitative Results
-![1.0](./Fig/Result.png)
+![1.0](./Fig/Result1.png)
 
 ## Model Weights
 The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1v8-eGwVZMbvfUczbQEwwaA?pwd=7777)
