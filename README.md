@@ -9,11 +9,11 @@ To address these challenges, we propose HELPNet, a novel scribble-based weakly s
 Finally, the Structural prior refinement (SPR) module integrates connectivity analysis and image boundary prior to refine pseudo-label quality and enhance supervision.
 Experimental results on three public datasets ACDC, MSCMRseg, and CHAOS show that HELPNet significantly outperforms state-of-the-art methods for scribble-based weakly supervised segmentation and achieves performance comparable to fully supervised methods..
 
-![](./fig/Method.png)
+![](./Fig/Method.png)
 
 
 ## Qualitative Results
-![1.0](fig/Result.png)
+![1.0](Fig/Result.png)
 
 ## Model Weights
 The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1v8-eGwVZMbvfUczbQEwwaA?pwd=7777)
