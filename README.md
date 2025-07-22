@@ -7,7 +7,7 @@ This project contains the training and testing code for the paper, as well as th
 > Creating fully annotated labels for medical image segmentation is prohibitively time-intensive and costly, emphasizing the necessity for innovative approaches that minimize reliance on detailed annotations. Scribble annotations offer a more cost-effective alternative, significantly reducing the expenses associated with full annotations. However, scribble annotations offer limited and imprecise information, failing to capture the detailed structural and boundary characteristics necessary for accurate organ delineation.
 To address these challenges, we propose HELPNet, a novel scribble-based weakly supervised segmentation framework, designed to bridge the gap between annotation efficiency and segmentation performance. HELPNet integrates three modules. The Hierarchical perturbations consistency (HPC) module enhances feature learning by employing density-controlled jigsaw perturbations across global, local, and focal views, enabling robust modeling of multi-scale structural representations. Building on this, the Entropy-guided pseudo-label (EGPL) module evaluates the confidence of segmentation predictions using entropy, generating high-quality pseudo-labels. 
 Finally, the Structural prior refinement (SPR) module integrates connectivity analysis and image boundary prior to refine pseudo-label quality and enhance supervision.
-Experimental results on three public datasets ACDC, MSCMRseg, and CHAOS show that HELPNet significantly outperforms state-of-the-art methods for scribble-based weakly supervised segmentation and achieves performance comparable to fully supervised methods..
+Experimental results on three public datasets ACDC, MSCMRseg, and CHAOS show that HELPNet significantly outperforms state-of-the-art methods for scribble-based weakly supervised segmentation and achieves performance comparable to fully supervised methods.
 
 ![](./Fig/Method.png)
 
@@ -30,6 +30,8 @@ The download links and extraction codes for our model weights are as [Checkpoint
 *  The CHAOS dataset with mask annotations can be downloaded from [CHOAS](https://chaos.grand-challenge.org/).
 
 *  Scribble for CHAOS can be found at [CHOAS_scribbles](https://github.com/zefanyang/pacingpseudo).
+
+The above are the links to the datasets used in the article. We are not the creators of these datasets. If you use any of the following data, please cite the corresponding papers. The image boundary priors can be extracted using the PiDiNet network; the authors of [PiDiNet](https://openaccess.thecvf.com/content/ICCV2021/papers/Su_Pixel_Difference_Networks_for_Efficient_Edge_Detection_ICCV_2021_paper.pdf) have provided a pre-trained model.
 
 ## Requirements
 * python 3.8 <br>
