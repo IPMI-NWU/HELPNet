@@ -16,7 +16,7 @@ Experimental results on three public datasets ACDC, MSCMRseg, and CHAOS show tha
 ![1.0](./Fig/Result1.png)
 
 ## Model Weights
-The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1v8-eGwVZMbvfUczbQEwwaA?pwd=7777)
+The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1N_ax6d1kSG3TN_w_vC6PZw?pwd=7777)
 
 ## Datasets
 *  The MSCMRseg dataset with mask annotations can be downloaded from [MSCMRseg](https://zmiclab.github.io/zxh/0/mscmrseg19/data.html).
