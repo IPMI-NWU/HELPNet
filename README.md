@@ -16,7 +16,7 @@ Experimental results on three public datasets ACDC, MSCMRseg, and CHAOS show tha
 ![1.0](./Fig/Result1.png)
 
 ## Model Weights
-The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1N_ax6d1kSG3TN_w_vC6PZw?pwd=7777)
+The download links and extraction codes for our model weights are as [Checkpoint](https://pan.baidu.com/s/1aiup2qyaRSxm_iL5rdkbjQ?pwd=7777)
 
 ## Datasets
 *  The MSCMRseg dataset with mask annotations can be downloaded from [MSCMRseg](https://zmiclab.github.io/zxh/0/mscmrseg19/data.html).
@@ -32,6 +32,9 @@ The download links and extraction codes for our model weights are as [Checkpoint
 *  Scribble for CHAOS can be found at [CHOAS_scribbles](https://github.com/zefanyang/pacingpseudo).
 
 The above are the links to the datasets used in the article. We are not the creators of these datasets. If you use any of the following data, please cite the corresponding papers. The image boundary priors can be extracted using the PiDiNet network; the authors of [PiDiNet](https://openaccess.thecvf.com/content/ICCV2021/papers/Su_Pixel_Difference_Networks_for_Efficient_Edge_Detection_ICCV_2021_paper.pdf) have provided a pre-trained model.
+
+We have provided the extracted image boundary prior information we have obtained, and the link is [HELPNet_edges](https://pan.baidu.com/s/1hcM5ww3BIFgQhwFAAH_9HQ?pwd=7777).
+
 
 ## Requirements
 * python 3.8 <br>
