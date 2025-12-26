@@ -1,23 +1,32 @@
-import os
-import argparse
-import datetime
-import random
-import time
-from pathlib import Path
-from tensorboardX import SummaryWriter
 import numpy as np
+from skimage import transform
+import nibabel as nib
+import os
+from medpy.metric.binary import dc
+import pandas as pd
+import glob
+import re
 import torch
-from engines import train_one_epoch
-torch.multiprocessing.set_sharing_strategy('file_system')
-from torch.utils.data import DataLoader
-import util.misc as utils
-from data import build
-from inference import infer
-from models import build_model
-from torch.autograd import Variable
 
 
-def convert_targets(targets):
+def makefolder(folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+        return True
+    return False
+
+
+def load_nii(img_path):
+    nimg = nib.load(img_path)
+    return nimg.get_fdata(), nimg.affine, nimg.header
+
+
+def save_nii(img_path, data, affine, header):
+    nimg = nib.Nifti1Image(data, affine=affine, header=header)
+    nimg.to_filename(img_path)
+
+
+def convert_targets(targets, device):
     masks = [t["masks"] for t in targets]
     target_masks = torch.stack(masks)
     shp_y = target_masks.shape
@@ -30,222 +39,220 @@ def convert_targets(targets):
     return target_masks
 
 
+def conv_int(i):
+    return int(i) if i.isdigit() else i
+
+
+def natural_order(sord):
+    if isinstance(sord, tuple):
+        sord = sord[0]
+    return [conv_int(c) for c in re.split(r'(\d+)', sord)]
+
+
 @torch.no_grad()
-def evaluate(model, criterion, dataloader_dict, device, visualizer, epoch, writer):
+def infer(model, device):
     model.eval()
-    criterion.eval()
-    metric_logger = utils.MetricLogger(delimiter="  ")
-    header = 'Test:'
-    print_freq = 20
-    numbers = {k: len(v) for k, v in dataloader_dict.items()}
-    dataloader = dataloader_dict['MR']
-    tasks = dataloader_dict.keys()
-    counts = {k: 0 for k in tasks}
-    total_steps = sum(numbers.values())
-    start_time = time.time()
-    sample_list, output_list, target_list = [], [], []
-    step = 0
-    for samples, targets in dataloader:
-        start = time.time()
-        tasks = [t for t in tasks if counts[t] < numbers[t]]
-        task = random.sample(tasks, 1)[0]
-        counts.update({task: counts[task] + 1})
-        datatime = time.time() - start
-        samples = samples.to(device)
-        targets = [{k: v.to(device) for k, v in t.items() if not isinstance(v, str)} for t in targets]
-        targets_onehot = convert_targets(targets)
-        samples_var = Variable(samples.tensors, requires_grad=True)
-        outputs = model(samples_var, task)
-        loss_dict = criterion(outputs, targets_onehot)
-        weight_dict = criterion.weight_dict
-        loss_dict_reduced = utils.reduce_dict(loss_dict)
-        loss_dict_reduced_scaled = {k: v * weight_dict[k] for k, v in loss_dict_reduced.items() if k in weight_dict}
-        metric_logger.update(loss=loss_dict_reduced_scaled['loss_CrossEntropy'], **loss_dict_reduced_scaled)
-        itertime = time.time() - start
-        metric_logger.log_every(step, total_steps, datatime, itertime, print_freq, header)
-        if step == 8:
-            sample_list.append(samples_var[0])
-            _, pre_masks = torch.max(outputs['pred_masks'][0], 0, keepdims=True)
-            output_list.append(pre_masks)
-            target_list.append(targets_onehot.argmax(1, keepdim=True)[0])
-        step = step + 1
-    # gather the stats from all processes
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('{} Total time: {} ({:.4f} s / it)'.format(header, total_time_str, total_time / total_steps))
-    metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
-    stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-    writer.add_scalar('avg_DSC', stats['Avg'], epoch)
-    visualizer(torch.stack(sample_list), torch.stack(output_list), torch.stack(target_list), epoch, writer)
-    return stats
+
+    # test_folder = "data/datasets/ACDC_dataset/TestSet/images/"
+    # label_folder = "data/datasets/ACDC_dataset/TestSet/labels/"
+    test_folder = "data/datasets/MSCMR_dataset/TestSet/images/"
+    label_folder = "data/datasets/MSCMR_dataset/TestSet/labels/"
+
+    output_folder = "output/MSCMR_exp1/"
+    model_path = "output/MSCMR_exp1/xxx_xxx_checkpoint.pth"
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    model.load_state_dict(torch.load(model_path, map_location='cpu')['model'])
+    # if os.path.exists(output_folder):
+    #     shutil.rmtree(output_folder)
+    # makefolder(output_folder)
+
+    target_resolution = (1.36719, 1.36719)
+
+    test_files = sorted(os.listdir(test_folder))
+    label_files = sorted(os.listdir(label_folder))
+    assert len(test_files) == len(label_files)
+
+    # read_image
+    for file_index in range(len(test_files)):
+        test_file = test_files[file_index]
+
+        label_file = label_files[file_index]
+        file_mask = os.path.join(label_folder, label_file)
+        mask_dat = load_nii(file_mask)
+        mask = mask_dat[0]
+
+        img_path = os.path.join(test_folder, test_file)
+        img_dat = load_nii(img_path)
+        img = img_dat[0].copy()
+
+        pixel_size = (img_dat[2].structarr['pixdim'][1], img_dat[2].structarr['pixdim'][2])
+        scale_vector = (pixel_size[0] / target_resolution[0],
+                        pixel_size[1] / target_resolution[1])
+
+        img = img.astype(np.float32)
+        img = np.divide((img - np.mean(img)), np.std(img))
+
+        slice_rescaleds = []
+        for slice_index in range(img.shape[2]):
+            img_slice = np.squeeze(img[:, :, slice_index])
+            slice_rescaled = transform.rescale(img_slice,
+                                               scale_vector,
+                                               order=1,
+                                               preserve_range=True,
+                                               anti_aliasing=True,
+                                               mode='constant')
+            slice_rescaleds.append(slice_rescaled)
+        img = np.stack(slice_rescaleds, axis=2)
+
+        predictions = []
+
+        for slice_index in range(img.shape[2]):
+            img_slice = img[:, :, slice_index]
+            # nx = 212
+            # ny = 212
+            nx = 224
+            ny = 224
+            x, y = img_slice.shape
+            x_s = (x - nx) // 2
+            y_s = (y - ny) // 2
+            x_c = (nx - x) // 2
+            y_c = (ny - y) // 2
+            # Crop section of image for prediction
+            if x > nx and y > ny:
+                slice_cropped = img_slice[x_s:x_s + nx, y_s:y_s + ny]
+            else:
+                slice_cropped = np.zeros((nx, ny))
+                if x <= nx and y > ny:
+                    slice_cropped[x_c:x_c + x, :] = img_slice[:, y_s:y_s + ny]
+                elif x > nx and y <= ny:
+                    slice_cropped[:, y_c:y_c + y] = img_slice[x_s:x_s + nx, :]
+                else:
+                    slice_cropped[x_c:x_c + x, y_c:y_c + y] = img_slice[:, :]
+
+            img_slice = slice_cropped
+            img_slice = np.divide((slice_cropped - np.mean(slice_cropped)), np.std(slice_cropped))
+            img_slice = np.reshape(img_slice, (1, 1, nx, ny))
+
+            img_slice = torch.from_numpy(img_slice)
+            img_slice = img_slice.to(device)
+            img_slice = img_slice.float()
+
+            outputs = model(img_slice, 'MR')
+
+            softmax_out = outputs["pred_masks"]
+            softmax_out = softmax_out.detach().cpu().numpy()
+            prediction_cropped = np.squeeze(softmax_out[0, ...])
+
+            slice_predictions = np.zeros((4, x, y))
+            # insert cropped region into original image again
+            if x > nx and y > ny:
+                slice_predictions[:, x_s:x_s + nx, y_s:y_s + ny] = prediction_cropped
+            else:
+                if x <= nx and y > ny:
+                    slice_predictions[:, :, y_s:y_s + ny] = prediction_cropped[:, x_c:x_c + x, :]
+                elif x > nx and y <= ny:
+                    slice_predictions[:, x_s:x_s + nx, :] = prediction_cropped[:, :, y_c:y_c + y]
+                else:
+                    slice_predictions[:, :, :] = prediction_cropped[:, x_c:x_c + x, y_c:y_c + y]
+            prediction = transform.resize(slice_predictions,
+                                          (4, mask.shape[0], mask.shape[1]),
+                                          order=1,
+                                          preserve_range=True,
+                                          anti_aliasing=True,
+                                          mode='constant')
+            prediction = np.uint8(np.argmax(prediction, axis=0))
+            # prediction = keep_largest_connected_components(prediction)
+            predictions.append(prediction)
+        prediction_arr = np.transpose(np.asarray(predictions, dtype=np.uint8), (1, 2, 0))
+        dir_pred = os.path.join(output_folder, "predictions")
+        makefolder(dir_pred)
+        out_file_name = os.path.join(dir_pred, label_file)
+        out_affine = mask_dat[1]
+        out_header = mask_dat[2]
+
+        save_nii(out_file_name[:-3], prediction_arr, out_affine, out_header)
+        dir_gt = os.path.join(output_folder, "masks")
+        makefolder(dir_gt)
+        mask_file_name = os.path.join(dir_gt, label_file)
+
+        save_nii(mask_file_name[:-3], mask_dat[0], out_affine, out_header)
+
+    filenames_gt = sorted(glob.glob(os.path.join(dir_gt, '*')), key=natural_order)
+    # filenames_gt = [f for f in filenames_gt if "01" in f]
+    filenames_pred = sorted(glob.glob(os.path.join(dir_pred, '*')), key=natural_order)
+    # filenames_pred = [f for f in filenames_pred if "01" in f]
+    file_names = []
+    structure_names = []
+    # measures per structure:
+    dices_list = []
+    structures_dict = {1: 'RV', 2: 'Myo', 3: 'LV'}
+    count = 0
+    for p_gt, p_pred in zip(filenames_gt, filenames_pred):
+        if os.path.basename(p_gt) != os.path.basename(p_pred):
+            raise ValueError("The two files don't have the same name"
+                             " {}, {}.".format(os.path.basename(p_gt),
+                                               os.path.basename(p_pred)))
+        # load ground truth and prediction
+        gt, _, header = load_nii(p_gt)
+        gt = np.around(gt)
+        pred, _, _ = load_nii(p_pred)
+        zooms = header.get_zooms()
+        # calculate measures for each structure
+        for struc in [3, 1, 2]:
+            gt_binary = (gt == struc) * 1
+            pred_binary = (pred == struc) * 1
+            if np.sum(gt_binary) == 0 and np.sum(pred_binary) == 0:
+                dices_list.append(1)
+            elif np.sum(pred_binary) > 0 and np.sum(gt_binary) == 0 or np.sum(pred_binary) == 0 and np.sum(
+                    gt_binary) > 0:
+                dices_list.append(0)
+                count += 1
+            else:
+                dices_list.append(dc(gt_binary, pred_binary))
+            file_names.append(os.path.basename(p_pred))
+            structure_names.append(structures_dict[struc])
+
+    df = pd.DataFrame({'dice': dices_list, 'struc': structure_names, 'filename': file_names})
+    print(df['dice'].mean(), df['dice'].std())
+    print("RV: ", df[df['struc'] == 'RV']['dice'].mean(), df[df['struc'] == 'RV']['dice'].std())
+    print("Myo: ", df[df['struc'] == 'Myo']['dice'].mean(), df[df['struc'] == 'Myo']['dice'].std())
+    print("LV: ", df[df['struc'] == 'LV']['dice'].mean(), df[df['struc'] == 'LV']['dice'].std())
+
+    dices_list.append(df['dice'].mean())
+    structure_names.append('Dice mean')
+    file_names.append('')
+    dices_list.append(df['dice'].std())
+    structure_names.append('Dice std')
+    file_names.append('')
+
+    dices_list.append(df[df['struc'] == 'LV']['dice'].mean())
+    structure_names.append('LV Dice mean')
+    file_names.append('')
+    dices_list.append(df[df['struc'] == 'LV']['dice'].std())
+    structure_names.append('LV Dice std')
+    file_names.append('')
+
+    dices_list.append(df[df['struc'] == 'RV']['dice'].mean())
+    structure_names.append('RV Dice mean')
+    file_names.append('')
+    dices_list.append(df[df['struc'] == 'RV']['dice'].std())
+    structure_names.append('RV Dice std')
+    file_names.append('')
+
+    dices_list.append(df[df['struc'] == 'Myo']['dice'].mean())
+    structure_names.append('Myo Dice mean')
+    file_names.append('')
+    dices_list.append(df[df['struc'] == 'Myo']['dice'].std())
+    structure_names.append('Myo Dice std')
+    file_names.append('')
+
+    df = pd.DataFrame({'dice': dices_list, 'struc': structure_names, 'filename': file_names})
+    csv_path = os.path.join(output_folder, "stats.csv")
+    df.to_csv(csv_path)
+    return df
 
 
-def get_args_parser():
-    tasks = {'MR': {'lab_values': [0, 1, 2, 3, 4, 5], 'out_channels': 4}}
-    parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
-    parser.add_argument('--lr', default=0.0001, type=float)
-    parser.add_argument('--batch_size', default=4, type=int)
-    parser.add_argument('--weight_decay', default=1e-4, type=float)
-    parser.add_argument('--epochs', default=1000, type=int)
-    parser.add_argument('--lr_drop', default=500, type=int)
-    parser.add_argument('--tasks', default=tasks, type=dict)
-    parser.add_argument('--model', default='MSCMR', required=False)
 
-    # Model parameters
-    parser.add_argument('--frozen_weights', type=str, default=None, help="Path to the pretrained model. If set, only the mask head will be trained")
-    parser.add_argument('--in_channels', default=1, type=int)
-
-    # * Loss coefficients
-    parser.add_argument('--multiDice_loss_coef', default=0, type=float)
-    parser.add_argument('--CrossEntropy_loss_coef', default=1, type=float)
-    parser.add_argument('--Rv', default=1, type=float)
-    parser.add_argument('--Lv', default=1, type=float)
-    parser.add_argument('--Myo', default=1, type=float)
-    parser.add_argument('--Avg', default=1, type=float)
-
-    # dataset parameters
-    parser.add_argument('--dataset', default='MSCMR_dataset', type=str, help='dataset')
-    # set your outputdir 
-    parser.add_argument('--output_dir', default='output/MSCMR_exp1/', help='path where to save, empty for no saving')
-    parser.add_argument('--device', default='cuda', type=str, help='device to use for training / testing')
-    parser.add_argument('--GPU_ids', type=str, default='0', help='Ids of GPUs')
-    parser.add_argument('--seed', default=42, type=int)
-    parser.add_argument('--eval', default=False, action='store_true')
-    parser.add_argument('--num_workers', default=4, type=int)
-
-    # distributed training parameters
-    parser.add_argument('--world_size', default=1, type=int, help='number of distributed processes')
-    parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
-    return parser
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
-def main(args):
-    if not args.eval:
-        writer = SummaryWriter(log_dir=args.output_dir + '/summary')
-    args.mean = torch.tensor([0.5], dtype=torch.float32).reshape(1, 1, 1, 1).cuda()
-    args.std = torch.tensor([0.5], dtype=torch.float32).reshape(1, 1, 1, 1).cuda()
-    device = torch.device(args.device)
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.allow_tf32 = True
-    seed = args.seed + utils.get_rank()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    losses = ['CrossEntropy']
-    model, criterion, postprocessors, visualizer = build_model(args, losses)
-    model.to(device)
-
-    if args.eval:
-        infer(model, device)
-        return
-
-    model_without_ddp = model
-
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('number of params:', n_parameters)
-
-    param_dicts = [{"params": [p for n, p in model_without_ddp.named_parameters() if p.requires_grad]}]
-    optimizer = torch.optim.Adam(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
-
-    print('Building training dataset...')
-    dataset_train_dict = build(image_set='train', args=args)
-    num_train = [len(v) for v in dataset_train_dict.values()]
-    print('Number of training images: {}'.format(sum(num_train)))
-
-    print('Building validation dataset...')
-    dataset_val_dict = build(image_set='val', args=args)
-    num_val = [len(v) for v in dataset_val_dict.values()]
-    print('Number of validation images: {}'.format(sum(num_val)))
-
-    sampler_train_dict = {k: torch.utils.data.RandomSampler(v) for k, v in dataset_train_dict.items()}
-    sampler_val_dict = {k: torch.utils.data.SequentialSampler(v) for k, v in dataset_val_dict.items()}
-
-    batch_sampler_train = {
-        k: torch.utils.data.BatchSampler(v, args.batch_size, drop_last=True) for k, v in sampler_train_dict.items()
-    }
-    dataloader_train_dict = {
-        k: DataLoader(v1, batch_sampler=v2, collate_fn=utils.collate_fn, num_workers=args.num_workers)
-        for (k, v1), v2 in zip(dataset_train_dict.items(), batch_sampler_train.values())
-    }
-    dataloader_val_dict = {
-        k: DataLoader(v1, args.batch_size, sampler=v2, drop_last=False, collate_fn=utils.collate_fn,
-                      num_workers=args.num_workers)
-        for (k, v1), v2 in zip(dataset_val_dict.items(), sampler_val_dict.values())
-    }
-
-    if args.frozen_weights is not None:
-        checkpoint = torch.load(args.frozen_weights, map_location='cpu')
-        model_without_ddp.whst.load_state_dict(checkpoint['model'])
-
-    output_dir = Path(args.output_dir)
-
-    print("Start training")
-    start_time = time.time()
-    best_dice = None
-    for epoch in range(args.epochs):
-        print('-' * 40)
-        train_stats = train_one_epoch(model, criterion, dataloader_train_dict, optimizer, device, epoch, args, writer)
-
-        lr_scheduler.step()
-
-        # evaluate
-        losses = ['CrossEntropy', 'Rv', 'Lv', 'Myo', 'Avg']
-        _, criterion, _, _ = build_model(args, losses)
-
-        test_stats = evaluate(model, criterion, dataloader_val_dict, device, visualizer, epoch, writer)
-        # save checkpoint for high dice score
-        dice_score = test_stats["Avg"]
-        print("dice score:", dice_score)
-        if args.output_dir:
-            checkpoint_paths = [output_dir / 'checkpoint.pth']
-            if best_dice is None or dice_score > best_dice:
-                best_dice = dice_score
-                print("Update best model!")
-                checkpoint_paths.append(output_dir / 'best_checkpoint.pth')
-
-            # You can change the threshold
-            if dice_score > 0.70:
-                print("Update high dice score model!")
-                file_name = str(dice_score)[0:6] + '_' + str(epoch) + '_checkpoint.pth'
-                checkpoint_paths.append(output_dir / file_name)
-
-            # extra checkpoint before LR drop and every 100 epochs
-            if (epoch + 1) % args.lr_drop == 0 or (epoch + 1) % 100 == 0:
-                checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
-            for checkpoint_path in checkpoint_paths:
-                utils.save_on_master({
-                    'model': model_without_ddp.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'lr_scheduler': lr_scheduler.state_dict(),
-                    'args': args,
-                }, checkpoint_path)
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('MSCMR training and evaluation script', parents=[get_args_parser()])
-    args = parser.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(args.GPU_ids)
-    main(args)
