@@ -63,7 +63,7 @@ def evaluate(model, criterion, dataloader_dict, device, visualizer, epoch, write
         metric_logger.update(loss=loss_dict_reduced_scaled['loss_CrossEntropy'], **loss_dict_reduced_scaled)
         itertime = time.time() - start
         metric_logger.log_every(step, total_steps, datatime, itertime, print_freq, header)
-        if step == 0:
+        if step == 8:
             sample_list.append(samples_var[0])
             _, pre_masks = torch.max(outputs['pred_masks'][0], 0, keepdims=True)
             output_list.append(pre_masks)
@@ -107,7 +107,7 @@ def get_args_parser():
     # dataset parameters
     parser.add_argument('--dataset', default='MSCMR_dataset', type=str, help='dataset')
     # set your outputdir 
-    parser.add_argument('--output_dir', default='output/test/', help='path where to save, empty for no saving')
+    parser.add_argument('--output_dir', default='output/MSCMR_exp1/', help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda', type=str, help='device to use for training / testing')
     parser.add_argument('--GPU_ids', type=str, default='0', help='Ids of GPUs')
     parser.add_argument('--seed', default=42, type=int)
