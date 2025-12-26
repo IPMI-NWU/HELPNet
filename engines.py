@@ -241,13 +241,19 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             loss_scribble_jig_4[k] * weight_dict[k] for k in ['loss_CrossEntropy'] if k in weight_dict)
         loss_scribble_jig_4 = 0.2 * loss_scribble_jig_4
 
+        MSE_loss = nn.MSELoss(reduction='none')
+        pseudo_foreground = torch.sum(pseudo_pred[:, 1:, :], dim=1, keepdim=True)
+        edge_mask = torch.where(edge > 0.5, 1.0, 0.0)
+        loss_edge = MSE_loss(pseudo_foreground * edge_mask, edge * edge_mask)
+        loss_edge = (torch.sum(loss_edge, dim=(1, 2, 3)) / torch.sum(edge_mask, dim=(1, 2, 3))).mean() / 10
+
         loss_consistency_1_2 = 1 - Func.cosine_similarity(output_jig_2["pred_masks"], output_c["pred_masks"],
                                                           dim=1).mean()
         loss_consistency_1_2 = 0.3 * loss_consistency_1_2
 
         loss_consistency_1_4 = 1 - Func.cosine_similarity(output_jig_4["pred_masks"], output_c["pred_masks"],
                                                           dim=1).mean()
-        loss_consistency_1_4 = 0.3 * loss_consistency_1_4
+        loss_consistency_1_4 = 0.1 * loss_consistency_1_4
 
         loss_integrity = 1 - Func.cosine_similarity(pred[:, 0:4, :, :], pred_keep_largest_connected, dim=1).mean()
         loss_integrity = 0.3 * loss_integrity
@@ -257,11 +263,6 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                              dice_loss(output_jig_2["pred_masks"], pseudo_label) +
                              dice_loss(output_jig_4["pred_masks"], pseudo_label))
 
-        MSE_loss = nn.MSELoss(reduction='none')
-        pseudo_foreground = torch.sum(pseudo_pred[:, 1:, :], dim=1, keepdim=True)
-        edge_mask = torch.where(edge > 0.5, 1.0, 0.0)
-        loss_edge = MSE_loss(pseudo_foreground * edge_mask, edge * edge_mask)
-        loss_edge = (torch.sum(loss_edge, dim=(1, 2, 3)) / torch.sum(edge_mask, dim=(1, 2, 3))).mean()
         loss_edge = 0.3 * loss_edge
         # -------------------------------------------------------
         loss = loss_scribble + loss_scribble_jig_2 + loss_scribble_jig_4 + \
