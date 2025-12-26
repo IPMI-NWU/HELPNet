@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 from einops import rearrange, repeat
+from util.misc import NestedTensor, is_main_process
 
 
 class conv_block(nn.Module):
@@ -186,5 +187,6 @@ class Unet_new(nn.Module):
         return out
 
 
-def build_UNet():
+
+def build_UNet(args):
     return Unet_keep_size(in_ch=1, out_ch=4)
